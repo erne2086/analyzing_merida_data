@@ -1,0 +1,387 @@
+
+# Analysis of the Data from INEGI
+INEGI is the Mexican National Institute of Statistics and Geography, which provides a wealth of data on various aspects of Mexican society, including demographics, economics, and geography. The data we will be analyzing comes from the 2020 and 2010 census datasets for Yucatán.
+
+We are particularly interested in how migration patterns have affected the population of the biggest cities in the state, Merida, Valladolid and the coast area, like Progreso and Telchac.
+
+
+```{r}
+file_path_2020 <- "/Users/ecastillo/Documents/coding/analyzing_merida_data/ITER2020 - 31 Yucatán.csv"
+data_2020 <- read.csv(file_path_2020, fileEncoding = "UTF-8", sep = ",", header = TRUE)
+file_path_2010 <- "/Users/ecastillo/Documents/coding/analyzing_merida_data/RESLOC2010 - 31 Yucatán.csv" 
+data_2010 <- read.csv(file_path_2010, fileEncoding = "UTF-8", sep = ",", header = TRUE)
+# Display the first few rows of the dataset
+head(data_2020, 10)
+# Display the first few rows of the dataset
+head(data_2010, 10)
+```
+
+We also need a mapping between the column names and its meaning:
+```{r}
+# Create a mapping of column names to their meanings
+query_to_readable_en_2020 <- c(
+  "ENTIDAD" = "State code",
+  "NOM_ENT" = "State name",
+  "MUN" = "Municipality or borough code",
+  "NOM_MUN" = "Municipality or borough name",
+  "LOC" = "Locality code",
+  "NOM_LOC" = "Locality name",
+  "POBTOT" = "Total population",
+  "PNACENT" = "Population born in the state",
+  "PNACOE" = "Population born in another state",
+  "P3YM_HLI" = "Population aged 3+ speaking an Indigenous language",
+  "P3HLINHE" = "Population aged 3+ speaking an Indigenous language and not Spanish",
+  "P3HLI_HE" = "Population aged 3+ speaking an Indigenous language and Spanish",
+  "P5_HLI" = "Population aged 5+ speaking an Indigenous language",
+  "P5_HLI_NHE" = "Population aged 5+ speaking an Indigenous language and not Spanish",
+  "P5_HLI_HE" = "Population aged 5+ speaking an Indigenous language and Spanish",
+  "PHOG_IND" = "Population in Indigenous census households",
+  "POB_AFRO" = "Population identifying as Afro-Mexican or of African descent",
+  "GRAPROES" = "Average years of schooling",
+  "PEA" = "Economically active population aged 12+",
+  "POCUPADA" = "Employed population aged 12+",
+  "PDESOCUP" = "Unemployed population aged 12+",
+  "PE_INAC" = "Economically inactive population aged 12+",
+  "TOTHOG" = "Total census households",
+  "POBHOG" = "Population in census households",
+  "VIVTOT" = "Total housing units",
+  "TVIVHAB" = "Total inhabited housing units",
+  "TVIVPAR" = "Total private housing units",
+  "VIVPAR_DES" = "Uninhabited private housing units",
+  "VIVPAR_UT" = "Private housing units for seasonal use",
+  "OCUPVIVPAR" = "Occupants in inhabited private housing units",
+  "TVIVPARHAB" = "Total inhabited private housing units",
+  "VIVPAR_HAB" = "Inhabited private housing units",
+  "PROM_OCUP" = "Average occupants per inhabited private housing unit",
+  "PRO_OCUP_C" = "Average occupants per room in inhabited private housing units",
+  "PSINDER" = "Population without health service affiliation",
+  "PDER_SS" = "Population with health service affiliation"
+)
+
+query_to_readable_en_2010 <- c(
+  "ENTIDAD"       = "State code",
+  "NOM_ENT"       = "State name",
+  "MUN"           = "Municipality or borough code",
+  "NOM_MUN"       = "Municipality or borough name",
+  "LOC"           = "Locality code",
+  "NOM_LOC"       = "Locality name",
+  "P_TOTAL"       = "Total population",
+  "TOTHOG"        = "Total census households",
+  "P3YM_HLI"      = "Population aged 3+ speaking an Indigenous language",
+  "P3HLINHE"      = "Population aged 3+ speaking an Indigenous language and not Spanish",
+  "P3HLI_HE"      = "Population aged 3+ speaking an Indigenous language and Spanish",
+  "P5_HLI"        = "Population aged 5+ speaking an Indigenous language",
+  "P5_HLI_NHE"    = "Population aged 5+ speaking an Indigenous language and not Spanish",
+  "P5_HLI_HE"     = "Population aged 5+ speaking an Indigenous language and Spanish",
+  "PHOG_IND"      = "Population in Indigenous census households",
+  "PNACENT"       = "Population born in the state",
+  "PNACOE"        = "Population born in another state",
+  "VIVTOT"        = "Total housing units",
+  "T_VIVHAB"      = "Total inhabited housing units",
+  "TVIVPAR"       = "Total private housing units",
+  "VIVPAR_HAB"    = "Inhabited private housing units",
+  "TVIVPARHAB"    = "Total inhabited private housing units"
+)
+# Display a couple entries of the mapping
+head(query_to_readable_en_2020, 10)
+head(query_to_readable_en_2010, 10)
+```
+
+# Analysis of the Data from INEGI
+We will analyze the data to understand the migration patterns and demographic changes in Yucatán, focusing on the cities of Merida, Valladolid, Progreso, and Telchac. The analysis will include:
+- Population changes between 2010 and 2020.
+- How has the migration impacted the density of Indigenous people in these cities.
+- How has this impacted the occupation of houses.
+
+## Let's see the distribution of the population in the state of Yucatán
+```{r}
+library(ggplot2)
+library(dplyr)
+# lets see which are the biggest cities in Yucatán, the data has the total population as MUN == 0, so lets filter that out
+# the LOC = 0 is the total of the municipality
+# we only want to keep the
+biggest_cities_2020 <- data_2020 %>%
+  filter(MUN != 0) %>%
+  filter(LOC == 0) %>%
+  arrange(desc(POBTOT))
+
+# Lets add the population from 2010
+biggest_cities_2010 <- data_2010 %>%
+  filter(MUN != 0) %>%
+  filter(LOC == 0) %>%
+  arrange(desc(P_TOTAL))
+```
+
+## What are the biggest cities in Yucatan at the moment (2020)?
+```{r}
+# the total population is in the row where MUN is 0 and LOC is 0, so we can filter that out
+total_population_2020 <- (
+  data_2020 %>%
+  filter(MUN == 0, LOC == 0) %>%
+  select(POBTOT)
+  )$POBTOT
+
+
+
+# Display the top 10 biggest cities in Yucatán in 2020, add a column with the percentage of the total population
+biggest_cities_2020 %>%
+  select(NOM_MUN, POBTOT) %>%
+  arrange(desc(POBTOT)) %>%
+  mutate(PercentageOfTotal = POBTOT / total_population_2020 * 100) %>%
+  head(10)
+```
+
+## Lets see the distribution of the population in the biggest cities
+Lets analyze the population that was born in the state vs in another state with a pie graph.
+```{r}
+pop_born_in_state <- biggest_cities_2020 %>%
+  select(NOM_MUN, POBTOT, PNACENT, PNACOE) %>%
+  mutate(
+    BornInState = PNACENT,
+    BornInOtherState = PNACOE
+  ) %>%
+  select(NOM_MUN, POBTOT, BornInState, BornInOtherState) %>%
+  arrange(desc(POBTOT))
+```
+## What were the biggest cities in Yucatan in 2010?
+
+
+## Population Changes
+Let's see which cities had the biggest changes in population between 2010 and 2020.
+For that we need to focus only on total population, population born in the state and population born in another state.
+```{r}
+population_changes <- biggest_cities_2020 %>%
+  select(MUN, NOM_MUN, POBTOT, PNACENT, PNACOE) %>%
+  rename(
+    Population2020 = POBTOT,
+    BornInState2020 = PNACENT,
+    BornInOtherState2020 = PNACOE
+  ) %>%
+  # convert to numeric
+  mutate(
+    Population2020 = as.numeric(Population2020),
+    BornInState2020 = as.numeric(BornInState2020),
+    BornInOtherState2020 = as.numeric(BornInOtherState2020)
+  ) %>%
+  left_join(
+    biggest_cities_2010 %>%
+      select(MUN, P_TOTAL, PNACENT, PNACOE) %>%
+      rename(Population2010 = P_TOTAL,
+             BornInState2010 = PNACENT,
+             BornInOtherState2010 = PNACOE) %>%
+      mutate(
+        MUN = as.numeric(MUN),
+        Population2010 = as.numeric(Population2010),
+        BornInState2010 = as.numeric(BornInState2010),
+        BornInOtherState2010 = as.numeric(BornInOtherState2010)
+      ),
+    by = "MUN"
+  ) %>%
+  mutate(
+    MUN = as.numeric(MUN),
+    PopulationChange = Population2020 - Population2010,
+    BornInStateChange = BornInState2020 - BornInState2010,
+    BornInOtherStateChange = BornInOtherState2020 - BornInOtherState2010,
+    PercentageChange = (PopulationChange / Population2010) * 100
+  ) %>%
+  arrange(desc(PopulationChange))
+
+```
+## Display the population changes
+
+Total population changes.
+```{r}
+library(knitr)
+kable(population_changes %>%
+  select(MUN, NOM_MUN, Population2010, Population2020, PopulationChange, PercentageChange,) %>%
+  arrange(desc(PercentageChange)),
+  caption = "Population Changes in Yucatán Municipalities (2010–2020)",
+  digits = 2)
+```
+
+Born in state changes.
+```{r}
+total_population_2010 <- (
+  data_2010 %>%
+  filter(MUN == 0, LOC == 0) %>%
+  select(P_TOTAL)
+  )$P_TOTAL
+
+kable(population_changes %>%
+  mutate(
+    PercentageChange = (BornInStateChange / BornInState2010) * 100,
+    PercentageChangeToMunicipalityPop = (BornInStateChange / Population2010) * 100,
+    PercentageChangeToTotalPop = (BornInStateChange / total_population_2010) * 100,        
+  ) %>%
+  select(MUN, NOM_MUN, BornInState2010, BornInState2020, BornInStateChange, PercentageChange, PercentageChangeToMunicipalityPop, PercentageChangeToTotalPop) %>%
+  arrange(desc(PercentageChangeToMunicipalityPop)),
+  caption = "Population Changes Born in Yucatán (2010–2020)",
+  digits = 2)
+```
+Born in other state changes.
+```{r}
+kable(population_changes %>%
+  select(MUN, NOM_MUN, BornInOtherState2010, BornInOtherState2020, BornInOtherStateChange) %>%
+  mutate(
+    PercentageChange = (BornInOtherStateChange / BornInOtherState2010) * 100, 
+    PercentageChangeToMunicipalityPop = (BornInOtherStateChange / population_changes %>% select(Population2010)) * 100,
+    PercentageChangeToTotalPop = (BornInOtherStateChange / total_population_2010) * 100,        
+  ) %>%
+  arrange(desc(PercentageChangeToMunicipalityPop)),
+  caption = "Population Changes Born in Other States (2010–2020)",
+  digits = 2)
+```
+
+
+
+## Let's visualize the changes in population 
+Lets create a plot with the changes in population on top of a map.
+```{r}
+library(sf)
+yucatan_map <- st_read("/Users/ecastillo/Documents/coding/analyzing_merida_data/yucatan.geojson")
+yucatan_map <- yucatan_map %>%
+  mutate(CVE_MUN = as.numeric(CVE_MUN)) # Ensure CVE_MUN is numeric for joining
+map_data <- yucatan_map %>%
+  left_join(population_changes, by = c("CVE_MUN" = "MUN"))
+
+# Calculate centroids
+map_data_centroids <- st_centroid(map_data)
+ggplot(data = map_data) +
+  geom_sf(aes(fill = PopulationChange), color = "white") +
+  geom_sf_text(data = map_data_centroids, aes(label = NOMGEO), size = 2.5, color = "black") +
+  scale_fill_viridis_c(option = "C") +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 21.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "Population Change by Municipality (2010–2020)",
+    fill = "Pop. Change"
+  )
+```
+
+We can see that the biggest increases in population are around the areas of Merida, Valladolid and Tizimin.
+
+Lets see if we can find the same pattern in the influx of people from outside the state.
+
+## Let's visualize the changes in population born in Yucatan state and in other states.
+```{r}
+ggplot(data = map_data) +
+  geom_sf(aes(fill = BornInStateChange), color = "white") +
+  geom_sf_text(data = map_data_centroids, aes(label = NOMGEO), size = 2.5, color = "black") +
+  scale_fill_viridis_c(option = "C") +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 21.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "Population Change from Within Yucatán (2010–2020)",
+    fill = "Pop. Change"
+  )
+```
+
+```{r}
+ggplot(data = map_data) +
+  geom_sf(aes(fill = BornInOtherStateChange), color = "white") +
+  geom_sf_text(data = map_data_centroids, aes(label = NOMGEO), size = 2.5, color = "black") +
+  scale_fill_viridis_c(option = "C") +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 21.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "Population Change from Other States (2010–2020)",
+    fill = "Pop. Change"
+  )
+```
+
+The trend is similar.
+
+## Let's see how the Indigenous population has changed
+```{r}
+indigenous_population_changes <- biggest_cities_2020 %>%
+  select(MUN, NOM_MUN, P3YM_HLI, P3HLINHE, P3HLI_HE, P5_HLI, P5_HLI_NHE, P5_HLI_HE) %>%
+  rename(
+    IndigenousPopulation2020 = P3YM_HLI,
+    IndigenousNotSpanish2020 = P3HLINHE,
+    IndigenousAndSpanish2020 = P3HLI_HE,
+    IndigenousPopulation5Plus2020 = P5_HLI,
+    IndigenousNotSpanish5Plus2020 = P5_HLI_NHE,
+    IndigenousAndSpanish5Plus2020 = P5_HLI_HE
+  ) %>%
+  mutate(
+    MUN = as.numeric(MUN),
+    IndigenousPopulation2020 = as.numeric(IndigenousPopulation2020),
+    IndigenousNotSpanish2020 = as.numeric(IndigenousNotSpanish2020),
+    IndigenousAndSpanish2020 = as.numeric(IndigenousAndSpanish2020),
+    IndigenousPopulation5Plus2020 = as.numeric(IndigenousPopulation5Plus2020),
+    IndigenousNotSpanish5Plus2020 = as.numeric(IndigenousNotSpanish5Plus2020),
+    IndigenousAndSpanish5Plus2020 = as.numeric(IndigenousAndSpanish5Plus2020)
+  ) %>%
+  left_join(
+    biggest_cities_2010 %>%
+      select(MUN, P3YM_HLI, P3HLINHE, P3HLI_HE, P5_HLI, P5_HLI_NHE, P5_HLI_HE) %>%
+      rename(
+        IndigenousPopulation2010 = P3YM_HLI,
+        IndigenousNotSpanish2010 = P3HLINHE,
+        IndigenousAndSpanish2010 = P3HLI_HE,
+        IndigenousPopulation5Plus2010 = P5_HLI,
+        IndigenousNotSpanish5Plus2010 = P5_HLI_NHE,
+        IndigenousAndSpanish5Plus2010 = P5_HLI_HE
+      ) %>%
+      mutate(
+        MUN = as.numeric(MUN),
+        IndigenousPopulation2010 = as.numeric(IndigenousPopulation2010),
+        IndigenousNotSpanish2010 = as.numeric(IndigenousNotSpanish2010),
+        IndigenousAndSpanish2010 = as.numeric(IndigenousAndSpanish2010),
+        IndigenousPopulation5Plus2010 = as.numeric(IndigenousPopulation5Plus2010),
+        IndigenousNotSpanish5Plus2010 = as.numeric(IndigenousNotSpanish5Plus2010),
+        IndigenousAndSpanish5Plus2010 = as.numeric(IndigenousAndSpanish5Plus2010)
+      ),
+    by = "MUN"
+  ) %>%
+  mutate(
+    MUN = as.numeric(MUN),
+    IndigenousPopulationChange = IndigenousPopulation2020 - IndigenousPopulation2010,
+    IndigenousNotSpanishChange = IndigenousNotSpanish2020 - IndigenousNotSpanish2010,
+    IndigenousAndSpanishChange = IndigenousAndSpanish2020 - IndigenousAndSpanish2010,
+    IndigenousPopulation5PlusChange = IndigenousPopulation5Plus2020 - IndigenousPopulation5Plus2010,
+    IndigenousNotSpanish5PlusChange = IndigenousNotSpanish5Plus2020 - IndigenousNotSpanish5Plus2010,
+    IndigenousAndSpanish5PlusChange = IndigenousAndSpanish5Plus2020 - IndigenousAndSpanish5Plus2010
+  ) %>%
+  arrange(desc(IndigenousPopulationChange))
+# Display the Indigenous population changes
+kable(indigenous_population_changes %>%
+  select(MUN, NOM_MUN, IndigenousPopulation2010, IndigenousPopulation2020, IndigenousPopulationChange),
+  caption = "Indigenous Population Changes in Yucatán Municipalities (2010–2020)",
+  digits = 2)
+```
+
+## Let's visualize the changes in Indigenous population
+```{r}
+map_data <- yucatan_map %>%
+  left_join(indigenous_population_changes, by = c("CVE_MUN" = "MUN"))
+ggplot(data = map_data) +
+  geom_sf(aes(fill = IndigenousPopulationChange), color = "white") +
+  geom_sf_text(data = map_data_centroids, aes(label = NOMGEO), size = 2.5, color = "black") +
+  scale_fill_viridis_c(option = "C") +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 21.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "Indigenous Population Change by Municipality (2010–2020)",
+    fill = "Pop. Change"
+  )
+```
+
+We can see that there has been a decrease in the Indigenous population in Merida. A municipality that saw a significant increase is Kanasin, which sits next to Merida. 
+Kanasin is singificantly more affordable than Merida, so it is likely that indigenous people are moving there.
+
+
+```{r}
+ggplot(population_changes %>%
+         left_join(indigenous_population_changes, by = "MUN"),
+       aes(x = BornInOtherStateChange, y = IndigenousPopulationChange)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Relationship Between Out-of-State Migration and Indigenous Population Change",
+    x = "Change in Population Born in Other States",
+    y = "Change in Indigenous Population"
+  ) +
+  theme_minimal()
+```
+This plot shows the relationship between the change in population born in other states and the change in Indigenous population. The trend line suggests that as more people from other states move to Yucatán, there is a corresponding decrease in the Indigenous population.
