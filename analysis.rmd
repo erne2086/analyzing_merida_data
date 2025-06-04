@@ -82,9 +82,6 @@ query_to_readable_en_2010 <- c(
   "VIVPAR_HAB"    = "Inhabited private housing units",
   "TVIVPARHAB"    = "Total inhabited private housing units"
 )
-# Display a couple entries of the mapping
-head(query_to_readable_en_2020, 10)
-head(query_to_readable_en_2010, 10)
 ```
 
 # Analysis of the Data from INEGI
@@ -92,6 +89,16 @@ We will analyze the data to understand the migration patterns and demographic ch
 - Population changes between 2010 and 2020.
 - How has the migration impacted the density of Indigenous people in these cities.
 - How has this impacted the occupation of houses.
+
+## Lets explore the data
+```{r}
+# Display the structure of the 2020 dataset
+str(data_2020)
+# Display the structure of the 2010 dataset
+str(data_2010)
+```
+
+We can see that the data types may not be correct, so we will convert them when needed.
 
 ## Let's see the distribution of the population in the state of Yucatán
 ```{r}
@@ -111,6 +118,17 @@ biggest_cities_2010 <- data_2010 %>%
   filter(LOC == 0) %>%
   arrange(desc(P_TOTAL))
 ```
+
+Now that we have only the totals for each municipality, lets make sure we have the 106 Municipalities that exist in Yucatán.
+```{r}
+# Check the number of unique municipalities in the 2020 data
+num_municipalities_2020 <- nrow(biggest_cities_2020)
+num_municipalities_2010 <- nrow(biggest_cities_2010)
+cat("Number of unique municipalities in 2020:", num_municipalities_2020, "\n")
+cat("Number of unique municipalities in 2010:", num_municipalities_2010, "\n")
+```
+
+We can see that there are 106 municipalities in both datasets, so we can proceed with the analysis.
 
 ## What are the biggest cities in Yucatan at the moment (2020)?
 ```{r}
@@ -199,7 +217,27 @@ kable(population_changes %>%
   digits = 2)
 ```
 
-Born in state changes.
+Plot it in a bar graph, only the top 10 biggest changes, do it in percentage with respect to 2010. Increase the resolution of the plot.
+```{r}
+library(ggplot2)
+plot <- ggplot(population_changes %>%
+         select(MUN, NOM_MUN, Population2010, Population2020, PopulationChange, PercentageChange) %>%
+         arrange(desc(PercentageChange)) %>%
+         head(10),
+       aes(x = reorder(NOM_MUN, PercentageChange), y = PercentageChange)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Top 10 Population Changes in Yucatán Municipalities (2010–2020)",
+    x = "Municipality",
+    y = "Percentage Change (%)"
+  ) +
+  theme_minimal()
+ggsave("population_changes_top_10.png", plot, width = 10, height = 6, dpi = 300)
+print(plot)
+```
+
+Born in state changes. Save the top ten of the table to a file.
 ```{r}
 total_population_2010 <- (
   data_2010 %>%
@@ -207,29 +245,42 @@ total_population_2010 <- (
   select(P_TOTAL)
   )$P_TOTAL
 
-kable(population_changes %>%
+table <- kable(population_changes %>%
   mutate(
-    PercentageChange = (BornInStateChange / BornInState2010) * 100,
-    PercentageChangeToMunicipalityPop = (BornInStateChange / Population2010) * 100,
-    PercentageChangeToTotalPop = (BornInStateChange / total_population_2010) * 100,        
+    PercentageChange = round((BornInStateChange / BornInState2010) * 100, 2),
+    PercentageChangeToMunicipalityPop = round((BornInStateChange / Population2010) * 100, 2),
+    PercentageChangeToTotalPop = round((BornInStateChange / total_population_2010) * 100, 2),
   ) %>%
   select(MUN, NOM_MUN, BornInState2010, BornInState2020, BornInStateChange, PercentageChange, PercentageChangeToMunicipalityPop, PercentageChangeToTotalPop) %>%
-  arrange(desc(PercentageChangeToMunicipalityPop)),
+  arrange(desc(PercentageChangeToMunicipalityPop))-> population_changes_in_state,
   caption = "Population Changes Born in Yucatán (2010–2020)",
   digits = 2)
+# Save the table to a file
+write.csv(population_changes_in_state %>%
+  select(MUN, NOM_MUN, BornInState2010, BornInState2020, BornInStateChange, PercentageChange, PercentageChangeToMunicipalityPop, PercentageChangeToTotalPop) %>%
+  arrange(desc(PercentageChangeToMunicipalityPop)),
+  "population_changes_born_in_state.csv", row.names = FALSE, )
+print(table)
 ```
 Born in other state changes.
 ```{r}
-kable(population_changes %>%
-  select(MUN, NOM_MUN, BornInOtherState2010, BornInOtherState2020, BornInOtherStateChange) %>%
+table <- kable(population_changes %>%
   mutate(
-    PercentageChange = (BornInOtherStateChange / BornInOtherState2010) * 100, 
-    PercentageChangeToMunicipalityPop = (BornInOtherStateChange / population_changes %>% select(Population2010)) * 100,
-    PercentageChangeToTotalPop = (BornInOtherStateChange / total_population_2010) * 100,        
+    PercentageChange = round(((BornInOtherStateChange / BornInOtherState2010) * 100), 2),
+    PercentageChangeToMunicipalityPop = round((BornInOtherStateChange / Population2010) * 100, 2),
+    PercentageChangeToTotalPop = round((BornInOtherStateChange / total_population_2010) * 100, 2),        
   ) %>%
-  arrange(desc(PercentageChangeToMunicipalityPop)),
+  select(MUN, NOM_MUN, BornInOtherState2010, BornInOtherState2020, BornInOtherStateChange, PercentageChange, PercentageChangeToMunicipalityPop, PercentageChangeToTotalPop) %>%
+  arrange(desc(PercentageChangeToMunicipalityPop)) -> population_changes_out_state,
   caption = "Population Changes Born in Other States (2010–2020)",
   digits = 2)
+
+  # Save the table to a file
+write.csv(population_changes_out_state %>%
+  select(MUN, NOM_MUN, BornInOtherState2010, BornInOtherState2020, BornInOtherStateChange, PercentageChange, PercentageChangeToMunicipalityPop, PercentageChangeToTotalPop) %>%
+  arrange(desc(PercentageChangeToMunicipalityPop)),
+  "population_changes_born_in_other_state.csv", row.names = FALSE)
+print(table)
 ```
 
 
@@ -246,7 +297,7 @@ map_data <- yucatan_map %>%
 
 # Calculate centroids
 map_data_centroids <- st_centroid(map_data)
-ggplot(data = map_data) +
+map_plot = ggplot(data = map_data) +
   geom_sf(aes(fill = PopulationChange), color = "white") +
   geom_sf_text(data = map_data_centroids, aes(label = NOMGEO), size = 2.5, color = "black") +
   scale_fill_viridis_c(option = "C") +
@@ -256,6 +307,9 @@ ggplot(data = map_data) +
     title = "Population Change by Municipality (2010–2020)",
     fill = "Pop. Change"
   )
+print(map_plot)
+# save to png
+ggsave("population_change_map.png", map_plot, width = 10, height = 6, dpi = 300)
 ```
 
 We can see that the biggest increases in population are around the areas of Merida, Valladolid and Tizimin.
@@ -263,30 +317,44 @@ We can see that the biggest increases in population are around the areas of Meri
 Lets see if we can find the same pattern in the influx of people from outside the state.
 
 ## Let's visualize the changes in population born in Yucatan state and in other states.
+
 ```{r}
-ggplot(data = map_data) +
+# we need to get the max and min values for the fill scale
+global_min <- min(map_data$BornInStateChange, map_data$BornInOtherStateChange, na.rm = TRUE)
+global_max <- max(map_data$BornInStateChange, map_data$BornInOtherStateChange, na.rm = TRUE)
+
+```
+```{r}
+map_plot = ggplot(data = map_data) +
   geom_sf(aes(fill = BornInStateChange), color = "white") +
   geom_sf_text(data = map_data_centroids, aes(label = NOMGEO), size = 2.5, color = "black") +
-  scale_fill_viridis_c(option = "C") +
+  scale_fill_viridis_c(option = "C", limits = c(global_min, global_max)) +
   coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 21.5)) +  # Adjust as needed
   theme_minimal() +
   labs(
     title = "Population Change from Within Yucatán (2010–2020)",
     fill = "Pop. Change"
   )
+print(map_plot)
+# save to png
+ggsave("population_change_born_in_state_map.png", map_plot, width = 10, height = 6, dpi = 300)
 ```
 
 ```{r}
-ggplot(data = map_data) +
+
+map_plot = ggplot(data = map_data) +
   geom_sf(aes(fill = BornInOtherStateChange), color = "white") +
   geom_sf_text(data = map_data_centroids, aes(label = NOMGEO), size = 2.5, color = "black") +
-  scale_fill_viridis_c(option = "C") +
+  scale_fill_viridis_c(option = "C", limits = c(global_min, global_max)) +
   coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 21.5)) +  # Adjust as needed
   theme_minimal() +
   labs(
     title = "Population Change from Other States (2010–2020)",
     fill = "Pop. Change"
   )
+print(map_plot)
+# save to png
+ggsave("population_change_born_in_other_state_map.png", map_plot, width = 10, height = 6, dpi = 300)
 ```
 
 The trend is similar.
@@ -353,9 +421,10 @@ kable(indigenous_population_changes %>%
 
 ## Let's visualize the changes in Indigenous population
 ```{r}
+
 map_data <- yucatan_map %>%
   left_join(indigenous_population_changes, by = c("CVE_MUN" = "MUN"))
-ggplot(data = map_data) +
+map_plot <- ggplot(data = map_data) +
   geom_sf(aes(fill = IndigenousPopulationChange), color = "white") +
   geom_sf_text(data = map_data_centroids, aes(label = NOMGEO), size = 2.5, color = "black") +
   scale_fill_viridis_c(option = "C") +
@@ -365,6 +434,9 @@ ggplot(data = map_data) +
     title = "Indigenous Population Change by Municipality (2010–2020)",
     fill = "Pop. Change"
   )
+print(map_plot)
+# save to png
+ggsave("indigenous_population_change_map.png", map_plot, width = 10, height = 6, dpi = 300)
 ```
 
 We can see that there has been a decrease in the Indigenous population in Merida. A municipality that saw a significant increase is Kanasin, which sits next to Merida. 
@@ -385,3 +457,364 @@ ggplot(population_changes %>%
   theme_minimal()
 ```
 This plot shows the relationship between the change in population born in other states and the change in Indigenous population. The trend line suggests that as more people from other states move to Yucatán, there is a corresponding decrease in the Indigenous population.
+But it has one outlier that is skewing the results, so we will first see what it is and then we will remove it and replot it.
+
+```{r}
+# Identify the outlier
+# join, but keep only one NOM_MUN column
+population_changes %>%
+  left_join(indigenous_population_changes, by = "MUN") %>%
+  mutate(
+    ratio = BornInOtherStateChange / IndigenousPopulationChange
+  ) %>%
+  arrange(desc(ratio)) %>%
+  rename(
+    NOM_MUN = NOM_MUN.x
+  ) %>%
+  select(MUN, NOM_MUN, BornInOtherStateChange, IndigenousPopulationChange, ratio) %>%
+  tail(10)
+```
+
+Conkal is the outlier, it has a very high increase in population born in other states, but a very low increase in Indigenous population. This is likely due to the fact that Conkal is one of the most popular places to move into Merida, it is just next 
+to the city of Merida, a lot of new housing developments both luxurious and affordable.
+
+Merida is also skewing the results. Kanasin as well.
+
+Let's remove it to see the plot again more clearly.
+Add names to the points.
+
+```{r}
+population_changes %>%
+  left_join(indigenous_population_changes, by = "MUN") %>%
+  filter(MUN != 13, MUN != 41, MUN != 50, MUN !=59, MUN != 101, MUN != 102, MUN != 96) %>% # remove Merida, Kanasin, Conkal
+  # remove Conkal, Merida, Dzilam de Bravo
+  ggplot(aes(x = BornInOtherStateChange, y = IndigenousPopulationChange)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  geom_text(aes(label = NOM_MUN.x), vjust = -0.5, size = 3) +
+  labs(
+    title = "Relationship Between Out-of-State Migration and Indigenous Population Change (Without major cities)",
+    x = "Change in Population Born in Other States",
+    y = "Change in Indigenous Population"
+  ) +
+  theme_minimal()
+```
+
+The plot with the removed entries. 
+
+```{r}
+population_changes %>%
+  left_join(indigenous_population_changes, by = "MUN") %>%
+  filter(MUN == 13 | MUN == 41 | MUN == 50 | MUN ==59 | MUN == 101 | MUN == 102 | MUN == 96) %>% 
+  ggplot(aes(x = BornInOtherStateChange, y = IndigenousPopulationChange)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  geom_text(aes(label = NOM_MUN.x), vjust = -0.5, size = 3) +
+  labs(
+    title = "Relationship Between Out-of-State Migration and Indigenous Population Change (Only Major cities)",
+    x = "Change in Population Born in Other States",
+    y = "Change in Indigenous Population"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+map_data <- yucatan_map %>%
+  mutate(CVE_MUN = as.numeric(CVE_MUN)) %>%
+  left_join(indigenous_population_changes, by = c("CVE_MUN" = "MUN")) %>%
+  left_join(population_changes, by = c("CVE_MUN" = "MUN")) %>%
+  mutate(
+    IndigenousShare2010 = IndigenousPopulation2010 / Population2010 * 100,
+    IndigenousShare2020 = IndigenousPopulation2020 / Population2020 * 100
+  )
+
+# get the min and max values for the fill scale
+global_min <- min(map_data$IndigenousShare2010, map_data$IndigenousShare2020, na.rm = TRUE)
+global_max <- max(map_data$IndigenousShare2010, map_data$IndigenousShare2020, na.rm = TRUE)
+
+# Now it has geometry + your data, so this will work
+map_plot <- ggplot(map_data) +
+  geom_sf(aes(fill = IndigenousShare2010), color = "white") +
+  scale_fill_viridis_c(option = "D", limits = c(global_min, global_max)) +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 22.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "% of Indigenous Population in 2010",
+    fill = "% Indigenous"
+  )
+print(map_plot)
+ggsave("indigenous_population_share_2010.png", map_plot, width = 10, height = 6, dpi = 300)
+```
+
+
+
+```{r}
+
+# Now it has geometry + your data, so this will work
+map_plot <- ggplot(map_data) +
+  geom_sf(aes(fill = IndigenousShare2020), color = "white") +
+  scale_fill_viridis_c(option = "D", limits = c(global_min, global_max)) +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 22.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "% of Indigenous Population in 2020",
+    fill = "% Indigenous"
+  )
+print(map_plot)
+ggsave("indigenous_population_share_2020.png", map_plot, width = 10, height = 6, dpi = 300)
+```
+
+This shows a trend, the Indigenous population is decreasing in the state of Yucatán. either by being displaced or because their roots are being lost, the metholodgy of INEGI allows people to identify themselves.
+Another thing that is clear to see is that the indigenous population is concentrated in the south of the state, and from 2010 to 2020 the trend becomer more clear.
+
+Just out of curiosity, lets see how the change in Indigenous population that speak a native language has changed.
+```{r}
+
+map_plot <- ggplot(map_data) +
+  geom_sf(aes(fill = IndigenousPopulation5PlusChange), color = "white") +
+  geom_sf_text(data = map_data_centroids, aes(label = NOMGEO), size = 2.5, color = "black") +
+  scale_fill_viridis_c(option = "C") +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 21.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "Native language speaking Population Change by Municipality (2010–2020)",
+    fill = "Pop. Change"
+  )
+print(map_plot)
+# save to png
+ggsave("native_language_population_change_map.png", map_plot, width = 10, height = 6, dpi = 300)
+```
+
+# Let´s do the same with out of state migration
+```{r}
+# Start from yucatan_map to preserve geometry
+map_data <- yucatan_map %>%
+  mutate(CVE_MUN = as.numeric(CVE_MUN)) %>%
+  left_join(population_changes, by = c("CVE_MUN" = "MUN")) %>%
+  mutate(
+    OutOfStateShare2020 = BornInOtherState2020 / Population2020 * 100,
+    OutOfStateShare2010 = BornInOtherState2010 / Population2010 * 100
+  )
+```
+```{r}
+# Now it has geometry + your data, so this will work, lets plot 2010
+ggplot(map_data) +
+  geom_sf(aes(fill = OutOfStateShare2010), color = "white") +
+  scale_fill_viridis_c(option = "D") +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 22.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "% of Population Born in Other States in 2010",
+    fill = "% Out of State"
+  )
+```
+
+```{r}
+# Now it has geometry + your data, so this will work, lets plot 2020
+ggplot(map_data) +
+  geom_sf(aes(fill = OutOfStateShare2020), color = "white") +
+  scale_fill_viridis_c(option = "D") +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 22.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "% of Population Born in Other States in 2020",
+    fill = "% Out of State"
+  )
+```
+
+There is an increase in Merida and its surroundings, but apart from that is not as clear as the Indigenous population. 
+
+
+## Lets explore the housing pressure
+
+```{r}
+housing_pressure_2010 <- biggest_cities_2010 %>%
+  mutate(
+    POBTOT = as.numeric(P_TOTAL),
+    VIVTOT = as.numeric(VIVTOT),
+    HousingPressure = POBTOT / VIVTOT
+  ) %>%
+  select(MUN, NOM_MUN, HousingPressure)
+
+housing_pressure_2020 <- biggest_cities_2020 %>%
+  mutate(
+    POBTOT = as.numeric(POBTOT),
+    VIVTOT = as.numeric(VIVTOT),
+    HousingPressure = POBTOT / VIVTOT
+  ) %>%
+  select(MUN, NOM_MUN, HousingPressure)
+
+# Add a 'Year' column to each and bind them
+housing_pressure_2010$Year <- "2010"
+housing_pressure_2020$Year <- "2020"
+
+housing_pressure_combined <- bind_rows(housing_pressure_2010, housing_pressure_2020)
+
+## plot both the 2010 and 2020 housing pressure, so they are next to each other
+ggplot(housing_pressure_combined, aes(x = reorder(NOM_MUN, -HousingPressure), y = HousingPressure, fill = Year)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "Housing Pressure Comparison by Municipality (2010 vs 2020)",
+    x = "Municipality",
+    y = "People per Inhabited Private Housing Unit",
+    fill = "Year"
+  ) +
+  theme_minimal()
+```
+
+It is not easy to distinguish, lets plot it for the cities that have grown the most.
+```{r}
+most_grown_cities <- population_changes %>%
+  filter(PopulationChange > 0) %>%
+  arrange(desc(PopulationChange)) %>%
+  head(10) %>%
+  select(MUN, NOM_MUN)
+
+plot <- housing_pressure_combined %>%
+  filter(MUN %in% most_grown_cities$MUN) %>%
+  ggplot(aes(x = reorder(NOM_MUN, -HousingPressure), y = HousingPressure, fill = Year)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  labs(
+    title = "Housing Pressure in Fastest Growing Municipalities (2010 vs 2020)",
+    x = "Municipality",
+    y = "People per Inhabited Private Housing Unit",
+    fill = "Year"
+  ) +
+  theme_minimal()
+print(plot)
+# save to png
+ggsave("housing_pressure_fastest_growing.png", plot, width = 10, height = 6, dpi = 300)
+```
+
+Lets plot the change in housing units vs population change.
+```{r}
+population_changes %>%
+  left_join(biggest_cities_2020 %>%
+              select(MUN, TVIVPARHAB, TVIVPARHAB_2020 = TVIVPARHAB) %>%
+              mutate(TVIVPARHAB_2020 = as.numeric(TVIVPARHAB_2020)), 
+            by = "MUN") %>%
+  left_join(biggest_cities_2010 %>%
+              select(MUN, TVIVPARHAB_2010 = TVIVPARHAB) %>%
+              mutate(TVIVPARHAB_2010 = as.numeric(TVIVPARHAB_2010)),
+            by = "MUN") %>%
+  mutate(
+    HousingUnitsChange = TVIVPARHAB_2020 - TVIVPARHAB_2010,
+    PopulationChange = Population2020 - Population2010
+  ) %>%
+  ggplot(aes(x = HousingUnitsChange, y = PopulationChange)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = TRUE, color = "blue") +
+  labs(
+    title = "Relationship Between Housing Units Change and Population Change",
+    x = "Change in Inhabited Private Housing Units",
+    y = "Change in Population"
+  )
+```
+
+
+It looks like the number of housing units has increased slightly faster than the population.
+I checked to see if there's any note in the methodology taken by INEGI, but I did not find anything that suggests the variable does not represent the same anymore.
+Some conclusions we can take from this and grounded on my personal knowledge, is that the coast and cities like Merida and Valladolid have become hotspots for people to move into and/ or buy to 
+rent out. This could explain the trend, but we would need to do a more in-depth analysis to confirm this.
+
+
+# Lets test the correlation between the change of out of state migration and the change in indigenous population.
+Lets normalize it using z-scores, so we can see the relationship more clearly.
+```{r}
+# Join the two datasets
+correlation_data <- population_changes %>%
+  select(MUN, NOM_MUN, BornInOtherStateChange) %>%
+  left_join(indigenous_population_changes %>% 
+              select(MUN, IndigenousPopulationChange), by = "MUN") %>%
+  mutate(
+    BornInOtherStateZ = scale(BornInOtherStateChange)[, 1],
+    IndigenousChangeZ = scale(IndigenousPopulationChange)[, 1]
+  )
+
+
+# Plot
+ggplot(correlation_data, aes(x = BornInOtherStateZ, y = IndigenousChangeZ)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) +
+  labs(
+    title = "Normalized Relationship Between In-Migration and Indigenous Population Change",
+    x = "Z-score of Change in Out-of-State Population",
+    y = "Z-score of Change in Indigenous Population"
+  ) +
+  theme_minimal()
+```
+
+It is not clear because the outlier is skewing the results, lets focus on the most grown cities.
+
+```{r}
+# Filter for the most grown cities
+plot <- ggplot(correlation_data %>%
+         filter(MUN %in% most_grown_cities$MUN),
+       aes(x = BornInOtherStateZ, y = IndigenousChangeZ)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) +
+  geom_text(aes(label = NOM_MUN), vjust = -0.5, size = 3) +
+  labs(
+    title = "Normalized Relationship Between In-Migration and Indigenous Population Change (Most Grown Cities)",
+    x = "Z-score of Change in Out-of-State Population",
+    y = "Z-score of Change in Indigenous Population"
+  ) +
+  theme_minimal()
+print(plot)
+# save to png
+ggsave("normalized_relationship_in_migration_indigenous_change.png", plot, width = 10, height = 6, dpi = 300)
+```
+
+Let's test it.
+```{r}
+cor.test(correlation_data$BornInOtherStateZ, correlation_data$IndigenousChangeZ)
+```
+
+
+I got access to the geojson with localities, so lets first plot the map.
+
+```{r}
+localities_map <- st_read("/Users/ecastillo/Documents/coding/analyzing_merida_data/localidades_yucatan_puntos.geojson")
+localities_map <- localities_map %>%
+  mutate(
+    CVE_MUN = as.numeric(cve_mun),  # Ensure CVE_MUN is numeric for joining
+    CVE_LOC = as.numeric(cve_loc) # Ensure CVE_LOC is numeric for joining
+  )
+#plot the map, add black borders and fill with light gray
+library(ggplot2)
+library(sf)
+ggplot(data = localities_map) +
+  geom_sf(fill = "lightgray", color = "black") +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 21.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "Localities in Yucatán",
+    fill = "Localities"
+  )
+```
+
+# Now we can join the localities with the population data
+```{r}
+# Join the localities map with the population data
+localities_map <- localities_map %>%
+  left_join(data_2020 %>%
+              select(MUN, NOM_MUN, LOC, NOM_LOC, POBTOT) %>%
+              mutate(MUN = as.numeric(MUN), LOC = as.numeric(LOC)),
+            by = c("CVE_MUN" = "MUN", "CVE_LOC" = "LOC"))
+
+```
+
+```{r}
+# Plot the localities with population data
+ggplot(data = localities_map) +
+  geom_sf(aes(fill = POBTOT), color = "black") +
+  scale_fill_viridis_c(option = "C") +
+  coord_sf(xlim = c(-90.5, -87.5), ylim = c(19.4, 21.5)) +  # Adjust as needed
+  theme_minimal() +
+  labs(
+    title = "Localities in Yucatán with Population Data (2020)",
+    fill = "Total Population"
+  )
+```
